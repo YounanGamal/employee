@@ -116,8 +116,9 @@ class ExcelExportService {
   static String exportEmployeeStatementCsv(
     Employee emp,
     List<SalaryRecord> salaries,
-    List<Advance> advances,
-  ) {
+    List<Advance> advances, [
+    List<Expense> disbursements = const [],
+  ]) {
     final sb = StringBuffer();
     sb.write(_bom);
     sb.writeln('كشف حساب الموظف,"${emp.name}"');
@@ -137,6 +138,15 @@ class ExcelExportService {
     sb.writeln('التاريخ,قيمة السلفة,المسدد,المتبقي,الحالة');
     for (final a in advances) {
       sb.writeln('"${_date(a.date)}",${_num(a.amount)},${_num(a.paidAmount)},${_num(a.remainingAmount)},"${a.isFullyPaid ? "مسددة" : "متبقية"}"');
+    }
+
+    if (disbursements.isNotEmpty) {
+      sb.writeln('');
+      sb.writeln('--- سجل المصروفات المباشرة (علاج / إكراميات لا تخصم) ---');
+      sb.writeln('التاريخ,البند,المبلغ,البيان,ملاحظات');
+      for (final d in disbursements) {
+        sb.writeln('"${_date(d.date)}","${d.category}",${_num(d.amount)},"${d.description}","${d.notes}"');
+      }
     }
 
     return sb.toString();

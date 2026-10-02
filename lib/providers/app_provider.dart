@@ -207,6 +207,32 @@ class AppProvider with ChangeNotifier {
     return _salaries.where((s) => s.employeeId == employeeId).toList();
   }
 
+  static DateTime getDayOneOfMonth(String monthStr) {
+    try {
+      final parts = monthStr.split('-');
+      if (parts.length >= 2) {
+        final year = int.parse(parts[0]);
+        final month = int.parse(parts[1]);
+        return DateTime(year, month, 1, 10, 0);
+      }
+    } catch (_) {}
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, 1, 10, 0);
+  }
+
+  List<Expense> getEmployeeExpenses(String employeeId) {
+    return _expenses
+        .where((e) => e.employeeId == employeeId)
+        .toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+  }
+
+  double getEmployeeTotalExpenses(String employeeId) {
+    return _expenses
+        .where((e) => e.employeeId == employeeId)
+        .fold<double>(0.0, (sum, e) => sum + e.amount);
+  }
+
   Employee? getEmployeeById(String id) {
     try {
       return _employees.firstWhere((e) => e.id == id);
@@ -469,6 +495,7 @@ class AppProvider with ChangeNotifier {
     if (unpaid.isEmpty) return 0;
 
     final now = DateTime.now();
+    final salaryDate = getDayOneOfMonth(month);
     int count = 0;
 
     for (final emp in unpaid) {
@@ -500,7 +527,7 @@ class AppProvider with ChangeNotifier {
         advancesDeducted: finalAdvanceDeduct,
         isPaid: true,
         paymentMethod: 'كاش',
-        paymentDate: now,
+        paymentDate: salaryDate,
         notes: 'صرف جماعي لكافة المرتبات المستحقة نقداً',
       );
 
@@ -533,7 +560,7 @@ class AppProvider with ChangeNotifier {
 
       final tx = TreasuryTransaction(
         id: 'tx_${now.millisecondsSinceEpoch}_${emp.id}_sal',
-        date: now,
+        date: salaryDate,
         type: TransactionType.salary,
         amount: netSalary,
         isCredit: false,

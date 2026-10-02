@@ -6,6 +6,7 @@ import 'package:printing/printing.dart';
 import '../models/employee.dart';
 import '../models/advance.dart';
 import '../models/salary_record.dart';
+import '../models/expense.dart';
 import '../models/treasury_transaction.dart';
 
 class PdfExportService {
@@ -184,6 +185,7 @@ class PdfExportService {
     required Employee emp,
     required List<SalaryRecord> salaries,
     required List<Advance> advances,
+    List<Expense> disbursements = const [],
     required double totalPaid,
     required double remainingAdvances,
     required BuildContext context,
@@ -282,6 +284,30 @@ class PdfExportService {
                     const pw.BoxDecoration(color: PdfColors.blueGrey800),
                 cellAlignment: pw.Alignment.center,
               ),
+            if (disbursements.isNotEmpty) ...[
+              pw.SizedBox(height: 15),
+              pw.Text('سجل المصروفات المباشرة (علاج / إكراميات لا تخصم)',
+                  style: pw.TextStyle(
+                      fontSize: 14, fontWeight: pw.FontWeight.bold)),
+              pw.SizedBox(height: 6),
+              pw.TableHelper.fromTextArray(
+                headers: ['التاريخ', 'البند', 'المبلغ', 'البيان', 'ملاحظات'],
+                data: disbursements.map((d) {
+                  return [
+                    DateFormat('yyyy/MM/dd').format(d.date),
+                    d.category,
+                    d.amount.toStringAsFixed(0),
+                    d.description,
+                    d.notes,
+                  ];
+                }).toList(),
+                headerStyle: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold, color: PdfColors.white),
+                headerDecoration:
+                    const pw.BoxDecoration(color: PdfColors.teal700),
+                cellAlignment: pw.Alignment.center,
+              ),
+            ],
           ];
         },
       ),
