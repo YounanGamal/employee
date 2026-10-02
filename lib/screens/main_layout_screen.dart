@@ -8,7 +8,6 @@ import 'income/income_screen.dart';
 import 'expenses/expenses_screen.dart';
 import 'treasury/treasury_screen.dart';
 import 'employees/employees_list_screen.dart';
-import 'advances/advances_screen.dart';
 import 'reports/reports_screen.dart';
 import 'search/quick_search_screen.dart';
 
@@ -37,7 +36,6 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
       DashboardScreen(onNavigateToTab: _navigateToTab),
       const EmployeesListScreen(),
       const TreasuryScreen(),
-      const AdvancesScreen(),
       const OperationsLogScreen(),
       const IncomeScreen(),
       const ExpensesScreen(),
@@ -48,7 +46,6 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
       const NavigationItemData(icon: Icons.dashboard_outlined, activeIcon: Icons.dashboard, label: 'لوحة التحكم'),
       const NavigationItemData(icon: Icons.people_outline, activeIcon: Icons.people, label: 'العاملين'),
       const NavigationItemData(icon: Icons.account_balance_outlined, activeIcon: Icons.account_balance, label: 'الخزنة 💰'),
-      const NavigationItemData(icon: Icons.request_quote_outlined, activeIcon: Icons.request_quote, label: 'السلف'),
       const NavigationItemData(icon: Icons.history_outlined, activeIcon: Icons.history, label: 'سجل العمليات'),
       const NavigationItemData(icon: Icons.arrow_downward_outlined, activeIcon: Icons.arrow_downward, label: 'الوارد'),
       const NavigationItemData(icon: Icons.arrow_upward_outlined, activeIcon: Icons.arrow_upward, label: 'المنصرف'),
@@ -166,7 +163,7 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
       );
     }
 
-    final bottomNavIndices = [0, 1, 2, 3, 4];
+    final bottomNavIndices = [0, 1, 2, 3];
     int bottomBarSelected = bottomNavIndices.indexOf(_currentIndex);
 
     return Scaffold(
@@ -242,11 +239,33 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.refresh, color: Colors.amber),
-              title: const Text('إعادة ضبط البيانات التجريبية', style: TextStyle(fontFamily: 'Cairo')),
+              leading: const Icon(Icons.delete_outline, color: Colors.red),
+              title: const Text('مسح كافة البيانات والبدء من جديد', style: TextStyle(fontFamily: 'Cairo')),
               onTap: () async {
                 Navigator.pop(context);
-                await provider.resetToSeedData();
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('مسح كافة البيانات'),
+                    content: const Text(
+                      'هل تريد بالتأكيد مسح كافة البيانات وتفريغ الخزنة والبدء من جديد؟',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('إلغاء'),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: AppTheme.expenseRed),
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('مسح الكل'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm == true) {
+                  await provider.clearAllData();
+                }
               },
             ),
           ],
@@ -275,11 +294,6 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
             icon: Icon(Icons.account_balance_outlined),
             selectedIcon: Icon(Icons.account_balance),
             label: 'الخزنة 💰',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.request_quote_outlined),
-            selectedIcon: Icon(Icons.request_quote),
-            label: 'السلف',
           ),
           NavigationDestination(
             icon: Icon(Icons.history_outlined),

@@ -7,7 +7,6 @@ import '../models/income.dart';
 import '../models/expense.dart';
 import '../models/treasury_transaction.dart';
 import '../services/storage_service.dart';
-import '../services/seed_data.dart';
 
 class AppProvider with ChangeNotifier {
   final StorageService _storageService = StorageService();
@@ -18,8 +17,8 @@ class AppProvider with ChangeNotifier {
   List<Income> _incomes = [];
   List<Expense> _expenses = [];
   List<TreasuryTransaction> _transactions = [];
-  double _initialBalance = 124000.0;
-  String _selectedMonth = '2026-09';
+  double _initialBalance = 0.0;
+  String _selectedMonth = DateFormat('yyyy-MM').format(DateTime.now());
   bool _isLoading = true;
 
   AppProvider() {
@@ -45,40 +44,26 @@ class AppProvider with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
-    final isInit = await _storageService.isInitialized();
-    if (!isInit) {
-      await _loadSeedData();
-      await _storageService.setInitialized(true);
-    } else {
-      _initialBalance = await _storageService.getInitialBalance();
-      _employees = await _storageService.getEmployees();
-      _advances = await _storageService.getAdvances();
-      _salaries = await _storageService.getSalaries();
-      _incomes = await _storageService.getIncomes();
-      _expenses = await _storageService.getExpenses();
-      _transactions = await _storageService.getTransactions();
+    final hasCleaned = await _storageService.hasCleanedStaticData();
+    if (!hasCleaned) {
+      await _storageService.clearAll();
+      await _storageService.markStaticDataCleaned();
     }
+
+    _initialBalance = await _storageService.getInitialBalance();
+    _employees = await _storageService.getEmployees();
+    _advances = await _storageService.getAdvances();
+    _salaries = await _storageService.getSalaries();
+    _incomes = await _storageService.getIncomes();
+    _expenses = await _storageService.getExpenses();
+    _transactions = await _storageService.getTransactions();
 
     _isLoading = false;
     notifyListeners();
   }
 
-  Future<void> _loadSeedData() async {
-    _initialBalance = SeedData.initialTreasuryBalance;
-    _employees = SeedData.getEmployees();
-    _advances = SeedData.getAdvances();
-    _salaries = SeedData.getSalaries(_employees);
-    _incomes = SeedData.getIncomes();
-    _expenses = SeedData.getExpenses();
-    _transactions = SeedData.getTransactions();
-    await _saveAll();
-  }
-
   Future<void> resetToSeedData() async {
-    await _storageService.clearAll();
-    await _loadSeedData();
-    await _storageService.setInitialized(true);
-    notifyListeners();
+    await clearAllData();
   }
 
   Future<void> clearAllData() async {

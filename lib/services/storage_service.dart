@@ -16,6 +16,17 @@ class StorageService {
   static const String _keyTransactions = 'app_transactions';
   static const String _keyInitialBalance = 'app_initial_balance';
   static const String _keyIsInitialized = 'app_is_initialized';
+  static const String _keyCleanedStaticData = 'app_cleaned_static_v2';
+
+  Future<bool> hasCleanedStaticData() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyCleanedStaticData) ?? false;
+  }
+
+  Future<void> markStaticDataCleaned() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyCleanedStaticData, true);
+  }
 
   Future<bool> isInitialized() async {
     final prefs = await SharedPreferences.getInstance();
