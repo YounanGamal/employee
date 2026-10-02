@@ -6,10 +6,10 @@ import '../theme/app_theme.dart';
 import '../widgets/stat_card.dart';
 import '../widgets/alert_banner.dart';
 import 'employees/employee_dialog.dart';
-import 'salaries/pay_salary_dialog.dart';
+import 'salaries/pay_salary_screen.dart';
 import 'advances/add_advance_dialog.dart';
 import 'income/add_income_dialog.dart';
-import 'expenses/add_expense_dialog.dart';
+import 'expenses/add_expense_screen.dart';
 import 'treasury/adjust_treasury_dialog.dart';
 import 'search/quick_search_screen.dart';
 
@@ -418,9 +418,11 @@ class DashboardScreen extends StatelessWidget {
                           label: 'تسجيل منصرف',
                           icon: Icons.arrow_upward,
                           color: AppTheme.expenseRed,
-                          onTap: () => showDialog(
-                            context: context,
-                            builder: (_) => const AddExpenseDialog(),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const AddExpenseScreen(),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -429,9 +431,11 @@ class DashboardScreen extends StatelessWidget {
                           label: 'صرف مرتب',
                           icon: Icons.payments_outlined,
                           color: Colors.blue.shade700,
-                          onTap: () => showDialog(
-                            context: context,
-                            builder: (_) => const PaySalaryDialog(),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const PaySalaryScreen(),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),

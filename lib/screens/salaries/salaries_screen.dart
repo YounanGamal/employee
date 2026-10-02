@@ -7,7 +7,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/alert_banner.dart';
 import '../../services/pdf_export_service.dart';
 import '../../services/excel_export_service.dart';
-import 'pay_salary_dialog.dart';
+import 'pay_salary_screen.dart';
 
 class SalariesScreen extends StatefulWidget {
   const SalariesScreen({super.key});
@@ -86,9 +86,11 @@ class _SalariesScreenState extends State<SalariesScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          showDialog(
-            context: context,
-            builder: (_) => const PaySalaryDialog(),
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const PaySalaryScreen(),
+            ),
           );
         },
         backgroundColor: AppTheme.primary,
@@ -151,9 +153,11 @@ class _SalariesScreenState extends State<SalariesScreen> {
                   final firstUnpaid = items.firstWhere(
                     (i) => !(i['isPaid'] as bool),
                   )['employee'];
-                  showDialog(
-                    context: context,
-                    builder: (_) => PaySalaryDialog(preselectedEmployee: firstUnpaid),
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => PaySalaryScreen(preselectedEmployee: firstUnpaid),
+                    ),
                   );
                 },
               ),
@@ -310,11 +314,13 @@ class _SalariesScreenState extends State<SalariesScreen> {
                                   if (!isPaid)
                                     ElevatedButton.icon(
                                       onPressed: () {
-                                        showDialog(
-                                          context: context,
-                                          builder: (_) => PaySalaryDialog(
-                                            preselectedEmployee: emp,
-                                            existingRecord: rec,
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => PaySalaryScreen(
+                                              preselectedEmployee: emp,
+                                              existingRecord: rec,
+                                            ),
                                           ),
                                         );
                                       },
@@ -329,11 +335,13 @@ class _SalariesScreenState extends State<SalariesScreen> {
                                   else
                                     OutlinedButton.icon(
                                       onPressed: () {
-                                        showDialog(
-                                          context: context,
-                                          builder: (_) => PaySalaryDialog(
-                                            preselectedEmployee: emp,
-                                            existingRecord: rec,
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => PaySalaryScreen(
+                                              preselectedEmployee: emp,
+                                              existingRecord: rec,
+                                            ),
                                           ),
                                         );
                                       },

@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../models/advance.dart';
 import '../../providers/app_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../services/pdf_export_service.dart';
 import '../../services/excel_export_service.dart';
 import 'employee_dialog.dart';
-import '../salaries/pay_salary_dialog.dart';
+import '../salaries/pay_salary_screen.dart';
 import '../advances/add_advance_dialog.dart';
+import '../expenses/add_expense_screen.dart';
 
 class EmployeeProfileScreen extends StatelessWidget {
   final String employeeId;
@@ -31,11 +33,13 @@ class EmployeeProfileScreen extends StatelessWidget {
     final totalPaid = provider.getEmployeeTotalPaid(employee.id);
     final salaries = provider.getEmployeeSalaries(employee.id);
     final advances = provider.getEmployeeAdvances(employee.id);
+    final disbursements = provider.getEmployeeExpenses(employee.id);
+    final totalDisbursed = provider.getEmployeeTotalExpenses(employee.id);
 
     final dateFormat = DateFormat('yyyy/MM/dd');
 
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           title: Text(employee.name),
@@ -59,6 +63,7 @@ class EmployeeProfileScreen extends StatelessWidget {
                     emp: employee,
                     salaries: salaries,
                     advances: advances,
+                    disbursements: disbursements,
                     totalPaid: totalPaid,
                     remainingAdvances: remainingAdvances,
                     context: context,
@@ -68,6 +73,7 @@ class EmployeeProfileScreen extends StatelessWidget {
                     employee,
                     salaries,
                     advances,
+                    disbursements,
                   );
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -101,6 +107,9 @@ class EmployeeProfileScreen extends StatelessWidget {
                     await provider.deleteEmployee(employee.id);
                     if (context.mounted) {
                       Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('تم حذف العامل بنجاح')),
+                      );
                     }
                   }
                 }
@@ -110,7 +119,7 @@ class EmployeeProfileScreen extends StatelessWidget {
                   value: 'pdf',
                   child: Row(
                     children: [
-                      Icon(Icons.picture_as_pdf, color: Colors.red, size: 18),
+                      Icon(Icons.picture_as_pdf, color: Colors.red, size: 20),
                       SizedBox(width: 8),
                       Text('طباعة كشف حساب (PDF)'),
                     ],
@@ -120,35 +129,34 @@ class EmployeeProfileScreen extends StatelessWidget {
                   value: 'excel',
                   child: Row(
                     children: [
-                      Icon(Icons.table_view, color: Colors.green, size: 18),
+                      Icon(Icons.table_view, color: Colors.green, size: 20),
                       SizedBox(width: 8),
                       Text('تصدير كشف حساب (Excel)'),
                     ],
                   ),
                 ),
+                const PopupMenuDivider(),
                 PopupMenuItem(
                   value: 'toggle',
                   child: Row(
                     children: [
                       Icon(
-                        employee.isActive ? Icons.person_off : Icons.person,
-                        size: 18,
+                        employee.isActive ? Icons.block : Icons.check_circle_outline,
+                        color: employee.isActive ? Colors.orange : Colors.green,
+                        size: 20,
                       ),
                       const SizedBox(width: 8),
-                      Text(employee.isActive
-                          ? 'تعطيل حساب العامل'
-                          : 'تفعيل حساب العامل'),
+                      Text(employee.isActive ? 'تعطيل العامل' : 'تنشيط العامل'),
                     ],
                   ),
                 ),
-                const PopupMenuDivider(),
                 const PopupMenuItem(
                   value: 'delete',
                   child: Row(
                     children: [
-                      Icon(Icons.delete_outline, color: Colors.red, size: 18),
+                      Icon(Icons.delete_outline, color: Colors.red, size: 20),
                       SizedBox(width: 8),
-                      Text('حذف العامل', style: TextStyle(color: Colors.red)),
+                      Text('حذف العامل نهائياً'),
                     ],
                   ),
                 ),
@@ -160,44 +168,42 @@ class EmployeeProfileScreen extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           children: [
             Container(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
-                  colors: [
-                    AppTheme.primaryDark,
-                    AppTheme.primary,
-                  ],
+                  colors: [AppTheme.primary, AppTheme.primaryDark],
                   begin: Alignment.topRight,
                   end: Alignment.bottomLeft,
                 ),
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
-                    color: AppTheme.primary.withValues(alpha: 0.3),
-                    blurRadius: 15,
-                    offset: const Offset(0, 6),
+                    color: AppTheme.primary.withValues(alpha: 0.25),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
                       CircleAvatar(
-                        radius: 32,
-                        backgroundColor: Colors.white.withValues(alpha: 0.2),
+                        radius: 30,
+                        backgroundColor: Colors.white,
                         child: Text(
                           employee.name.isNotEmpty
                               ? employee.name.trim().split(' ').first[0]
                               : '؟',
                           style: const TextStyle(
-                            fontSize: 28,
+                            fontSize: 24,
                             fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                            color: AppTheme.primary,
                           ),
                         ),
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -214,8 +220,7 @@ class EmployeeProfileScreen extends StatelessWidget {
                             const SizedBox(height: 4),
                             Row(
                               children: [
-                                const Icon(Icons.phone,
-                                    size: 14, color: Colors.white70),
+                                const Icon(Icons.phone, size: 14, color: Colors.white70),
                                 const SizedBox(width: 6),
                                 Text(
                                   employee.phone,
@@ -226,16 +231,29 @@ class EmployeeProfileScreen extends StatelessWidget {
                                 ),
                               ],
                             ),
+                            if (employee.nationalId.isNotEmpty) ...[
+                              const SizedBox(height: 3),
+                              Row(
+                                children: [
+                                  const Icon(Icons.badge_outlined, size: 14, color: Colors.white70),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'الرقم القومي: ${employee.nationalId}',
+                                    style: const TextStyle(
+                                      fontSize: 12.5,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ],
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: employee.isActive
-                              ? Colors.green.shade400
-                              : Colors.red.shade400,
+                          color: employee.isActive ? Colors.green.shade400 : Colors.red.shade400,
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
@@ -321,25 +339,39 @@ class EmployeeProfileScreen extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 12),
+            _buildMetricCard(
+              title: 'إجمالي المنصرف له (علاج / مكافآت)',
+              value: '${totalDisbursed.toStringAsFixed(0)} ج',
+              subtitle: 'مبالغ غير مخصومة من المرتب ولا تُسترد',
+              icon: Icons.medical_services_outlined,
+              color: Colors.teal.shade700,
+            ),
+            const SizedBox(height: 18),
 
             Row(
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      showDialog(
-                        context: context,
-                        builder: (ctx) => PaySalaryDialog(
-                          preselectedEmployee: employee,
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (ctx) => PaySalaryScreen(
+                            preselectedEmployee: employee,
+                          ),
                         ),
                       );
                     },
-                    icon: const Icon(Icons.attach_money, size: 18),
+                    icon: const Icon(Icons.payments_outlined, size: 18),
                     label: const Text('صرف مرتب'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.primary,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ),
@@ -357,13 +389,49 @@ class EmployeeProfileScreen extends StatelessWidget {
                     icon: const Icon(Icons.add_circle_outline, size: 18),
                     label: const Text('إعطاء سلفة'),
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (ctx) => AddExpenseScreen(
+                        preselectedEmployee: employee,
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.medical_services_outlined, size: 18),
+                label: const Text(
+                  'صرف للعامل (علاج / مكافأة / مساعدة) 💊',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.teal.shade700,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
 
             Container(
               decoration: BoxDecoration(
@@ -382,10 +450,13 @@ class EmployeeProfileScreen extends StatelessWidget {
                 labelStyle: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontFamily: 'Cairo',
+                  fontSize: 13,
                 ),
+                labelPadding: const EdgeInsets.symmetric(horizontal: 4),
                 tabs: [
-                  Tab(text: 'سجل المرتبات (${salaries.length})'),
-                  Tab(text: 'سجل السلف (${advances.length})'),
+                  Tab(text: 'المرتبات (${salaries.length})'),
+                  Tab(text: 'السلف (${advances.length})'),
+                  Tab(text: 'الصرف والبدلات (${disbursements.length})'),
                 ],
               ),
             ),
@@ -409,7 +480,9 @@ class EmployeeProfileScreen extends StatelessWidget {
                             final sal = salaries[i];
                             return ListTile(
                               contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 4),
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
                               leading: CircleAvatar(
                                 backgroundColor: sal.isPaid
                                     ? Colors.green.shade50
@@ -434,7 +507,7 @@ class EmployeeProfileScreen extends StatelessWidget {
                                 'أساسي: ${sal.basicSalary.toStringAsFixed(0)} ج | إضافي: +${sal.additions.toStringAsFixed(0)} | خصم: -${(sal.deductions + sal.advancesDeducted).toStringAsFixed(0)} ج',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: Colors.grey.shade700,
+                                  color: Colors.grey.shade600,
                                 ),
                               ),
                               trailing: Column(
@@ -443,20 +516,21 @@ class EmployeeProfileScreen extends StatelessWidget {
                                 children: [
                                   Text(
                                     '${sal.netSalary.toStringAsFixed(0)} ج',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                      color: Color(0xFF0F172A),
+                                      fontSize: 15,
+                                      color: sal.isPaid
+                                          ? Colors.green.shade800
+                                          : Colors.orange.shade800,
                                     ),
                                   ),
                                   Text(
-                                    sal.isPaid ? 'مدفوع نقداً' : 'غير مدفوع',
+                                    sal.isPaid ? 'مدفوع' : 'مستحق',
                                     style: TextStyle(
                                       fontSize: 11,
-                                      fontWeight: FontWeight.bold,
                                       color: sal.isPaid
-                                          ? Colors.green.shade700
-                                          : Colors.orange.shade700,
+                                          ? Colors.green.shade600
+                                          : Colors.orange.shade600,
                                     ),
                                   ),
                                 ],
@@ -479,7 +553,9 @@ class EmployeeProfileScreen extends StatelessWidget {
                             final adv = advances[i];
                             return ListTile(
                               contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 4),
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
                               leading: CircleAvatar(
                                 backgroundColor: adv.isFullyPaid
                                     ? Colors.green.shade50
@@ -493,42 +569,153 @@ class EmployeeProfileScreen extends StatelessWidget {
                                       : Colors.amber.shade800,
                                 ),
                               ),
-                              title: Text(
-                                'سلفة: ${adv.amount.toStringAsFixed(0)} ج.م',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: 'Cairo',
-                                ),
-                              ),
-                              subtitle: Text(
-                                'تاريخ: ${dateFormat.format(adv.date)} | مسدد: ${adv.paidAmount.toStringAsFixed(0)} ج',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade700,
-                                ),
-                              ),
-                              trailing: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.end,
+                              title: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
-                                    'المتبقي: ${adv.remainingAmount.toStringAsFixed(0)} ج',
-                                    style: TextStyle(
+                                    '${adv.amount.toStringAsFixed(0)} ج',
+                                    style: const TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      color: adv.remainingAmount > 0
-                                          ? Colors.red.shade700
-                                          : Colors.green.shade700,
+                                      fontSize: 15,
                                     ),
                                   ),
-                                  if (adv.autoDeductFromSalary)
-                                    const Text(
-                                      'خصم تلقائي',
+                                  Text(
+                                    dateFormat.format(adv.date),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'مسدد: ${adv.paidAmount.toStringAsFixed(0)} ج | متبقي: ${adv.remainingAmount.toStringAsFixed(0)} ج',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade700,
+                                    ),
+                                  ),
+                                  if (adv.notes.isNotEmpty)
+                                    Text(
+                                      adv.notes,
                                       style: TextStyle(
-                                        fontSize: 10,
-                                        color: Colors.teal,
+                                        fontSize: 11,
+                                        color: Colors.grey.shade500,
                                       ),
                                     ),
                                 ],
+                              ),
+                              trailing: !adv.isFullyPaid
+                                  ? TextButton(
+                                      onPressed: () {
+                                        _showPayAdvanceDialog(
+                                          context,
+                                          provider,
+                                          adv,
+                                        );
+                                      },
+                                      child: const Text('سداد يدوي'),
+                                    )
+                                  : const Icon(
+                                      Icons.check_circle,
+                                      color: Colors.green,
+                                      size: 18,
+                                    ),
+                            );
+                          },
+                        ),
+
+                  disbursements.isEmpty
+                      ? const Center(
+                          child: Text(
+                            'لا يوجد سجل منصرفات أو مكافآت مسجلة لهذا العامل',
+                            style: TextStyle(fontFamily: 'Cairo'),
+                          ),
+                        )
+                      : ListView.separated(
+                          itemCount: disbursements.length,
+                          separatorBuilder: (_, _) => const Divider(height: 1),
+                          itemBuilder: (ctx, i) {
+                            final exp = disbursements[i];
+                            return ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              leading: CircleAvatar(
+                                backgroundColor: Colors.purple.shade50,
+                                child: Icon(
+                                  Icons.medical_services_outlined,
+                                  color: Colors.purple.shade700,
+                                ),
+                              ),
+                              title: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    exp.category,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  Text(
+                                    '- ${exp.amount.toStringAsFixed(0)} ج',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15,
+                                      color: Colors.purple,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    exp.description,
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                  Text(
+                                    'التاريخ: ${dateFormat.format(exp.date)}${exp.notes.isNotEmpty ? " • ${exp.notes}" : ""}',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.delete_outline, size: 18, color: Colors.grey),
+                                onPressed: () async {
+                                  final confirm = await showDialog<bool>(
+                                    context: context,
+                                    builder: (c) => AlertDialog(
+                                      title: const Text('تأكيد الحذف'),
+                                      content: const Text('هل تريد حذف هذا المنصرف وإرجاع المبلغ إلى الخزنة؟'),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(c, false),
+                                          child: const Text('إلغاء'),
+                                        ),
+                                        ElevatedButton(
+                                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                                          onPressed: () => Navigator.pop(c, true),
+                                          child: const Text('حذف'),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  if (confirm == true) {
+                                    provider.deleteExpense(exp.id);
+                                  }
+                                },
                               ),
                             );
                           },
@@ -538,6 +725,58 @@ class EmployeeProfileScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showPayAdvanceDialog(
+    BuildContext context,
+    AppProvider provider,
+    Advance advance,
+  ) {
+    final controller = TextEditingController(
+      text: advance.remainingAmount.toStringAsFixed(0),
+    );
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('سداد سلفة يدوي'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('العامل: ${advance.employeeName}'),
+            const SizedBox(height: 6),
+            Text('المتبقي: ${advance.remainingAmount.toStringAsFixed(0)} ج'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'مبلغ السداد (ج.م)',
+                prefixIcon: Icon(Icons.attach_money),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final val = double.tryParse(controller.text.trim()) ?? 0.0;
+              if (val <= 0) return;
+              provider.repayAdvanceDirectly(advance.id, val);
+              Navigator.pop(ctx);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('تم تسجيل سداد السلفة بنجاح')),
+              );
+            },
+            child: const Text('تأكيد السداد'),
+          ),
+        ],
       ),
     );
   }

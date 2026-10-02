@@ -7,6 +7,8 @@ class Expense {
   final String description;
   final DateTime date;
   final String notes;
+  final String? employeeId;
+  final String? employeeName;
 
   Expense({
     required this.id,
@@ -15,6 +17,8 @@ class Expense {
     required this.description,
     required this.date,
     this.notes = '',
+    this.employeeId,
+    this.employeeName,
   });
 
   Expense copyWith({
@@ -24,6 +28,8 @@ class Expense {
     String? description,
     DateTime? date,
     String? notes,
+    String? employeeId,
+    String? employeeName,
   }) {
     return Expense(
       id: id ?? this.id,
@@ -32,6 +38,8 @@ class Expense {
       description: description ?? this.description,
       date: date ?? this.date,
       notes: notes ?? this.notes,
+      employeeId: employeeId ?? this.employeeId,
+      employeeName: employeeName ?? this.employeeName,
     );
   }
 
@@ -43,6 +51,8 @@ class Expense {
       'description': description,
       'date': date.toIso8601String(),
       'notes': notes,
+      'employeeId': employeeId,
+      'employeeName': employeeName,
     };
   }
 
@@ -56,6 +66,8 @@ class Expense {
           ? DateTime.tryParse(map['date']) ?? DateTime.now()
           : DateTime.now(),
       notes: map['notes'] ?? '',
+      employeeId: map['employeeId'],
+      employeeName: map['employeeName'],
     );
   }
 
