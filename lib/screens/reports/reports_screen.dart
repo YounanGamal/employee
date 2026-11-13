@@ -7,6 +7,8 @@ import '../../providers/app_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../services/pdf_export_service.dart';
 import '../../services/excel_export_service.dart';
+import '../../widgets/month_picker_dialog.dart';
+import '../salaries/exceptional_cases_dialog.dart';
 
 class ReportsScreen extends StatelessWidget {
   const ReportsScreen({super.key});
@@ -23,7 +25,30 @@ class ReportsScreen extends StatelessWidget {
     final netCashflow = incomeMonth - expenseMonth - salariesMonth;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('التقارير والتصدير 📊')),
+      appBar: AppBar(
+        title: Text('التقارير والتصدير ($month) 📊'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.calendar_month, color: AppTheme.primary),
+            tooltip: 'تغيير الشهر المالي',
+            onPressed: () async {
+              final selected = await MonthPickerDialog.show(
+                context,
+                initialMonth: provider.selectedMonth,
+                allowAllMonths: false,
+              );
+              if (selected != null && selected.isNotEmpty) {
+                await provider.setSelectedMonth(selected);
+              }
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.fact_check, color: Colors.orange),
+            tooltip: 'الحالات الاستثنائية وإغلاق الشهر',
+            onPressed: () => ExceptionalCasesDialog.show(context, month),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

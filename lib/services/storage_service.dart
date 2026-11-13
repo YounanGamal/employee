@@ -6,6 +6,7 @@ import '../models/salary_record.dart';
 import '../models/income.dart';
 import '../models/expense.dart';
 import '../models/treasury_transaction.dart';
+import '../models/monthly_period.dart';
 
 class StorageService {
   static const String _keyEmployees = 'app_employees';
@@ -17,6 +18,7 @@ class StorageService {
   static const String _keyInitialBalance = 'app_initial_balance';
   static const String _keyIsInitialized = 'app_is_initialized';
   static const String _keyCleanedStaticData = 'app_cleaned_static_v2';
+  static const String _keyPeriods = 'app_financial_periods';
 
   Future<bool> hasCleanedStaticData() async {
     final prefs = await SharedPreferences.getInstance();
@@ -46,6 +48,24 @@ class StorageService {
   Future<void> saveInitialBalance(double balance) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_keyInitialBalance, balance);
+  }
+
+  Future<List<MonthlyPeriod>> getPeriods() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = prefs.getString(_keyPeriods);
+    if (jsonStr == null || jsonStr.isEmpty) return [];
+    try {
+      final List list = json.decode(jsonStr);
+      return list.map((e) => MonthlyPeriod.fromMap(e)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> savePeriods(List<MonthlyPeriod> periods) async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = json.encode(periods.map((e) => e.toMap()).toList());
+    await prefs.setString(_keyPeriods, jsonStr);
   }
 
   Future<List<Employee>> getEmployees() async {

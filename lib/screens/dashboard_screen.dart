@@ -11,6 +11,8 @@ import 'advances/add_advance_dialog.dart';
 import 'income/add_income_dialog.dart';
 import 'expenses/add_expense_screen.dart';
 import 'treasury/adjust_treasury_dialog.dart';
+import '../widgets/month_picker_dialog.dart';
+import 'salaries/exceptional_cases_dialog.dart';
 import 'search/quick_search_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -120,7 +122,7 @@ class DashboardScreen extends StatelessWidget {
                     AlertBanner(
                       title: '⚠️ تنبيه المرتبات المستحقة',
                       message:
-                          '$unpaidEmployees عمال لم يتم صرف مرتباتهم لشهر سبتمبر (${provider.selectedMonth}).',
+                          '$unpaidEmployees عمال لم يتم صرف مرتباتهم لشهر ${provider.selectedMonth}.',
                       buttonText: 'صرف المرتبات',
                       onAction: () {
                         if (onNavigateToTab != null) {
@@ -211,7 +213,7 @@ class DashboardScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 6),
                         const Text(
-                          'الرصيد = البداية + الوارد - المنصرف - المرتبات - السلف',
+                          'الرصيد = رصيد بداية الشهر + الإيداعات والوارد - المنصرفات والمرتبات والسلف',
                           style: TextStyle(fontSize: 12, color: Colors.white70),
                         ),
                         const SizedBox(height: 16),
@@ -276,9 +278,9 @@ class DashboardScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 18),
 
-                  const Text(
-                    'المؤشرات المالية لشهر سبتمبر',
-                    style: TextStyle(
+                  Text(
+                    'المؤشرات المالية لشهر ${provider.selectedMonth}',
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                       fontFamily: 'Cairo',
@@ -460,6 +462,17 @@ class DashboardScreen extends StatelessWidget {
                             builder: (_) => const EmployeeDialog(),
                           ),
                         ),
+                        const SizedBox(width: 8),
+                        _buildQuickActionBtn(
+                          context: context,
+                          label: 'الحالات الاستثنائية',
+                          icon: Icons.fact_check_outlined,
+                          color: Colors.orange.shade800,
+                          onTap: () => ExceptionalCasesDialog.show(
+                            context,
+                            provider.selectedMonth,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -568,51 +581,14 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  void _pickMonth(BuildContext context, AppProvider provider) {
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        final months = [
-          '2026-09',
-          '2026-08',
-          '2026-07',
-          '2026-06',
-          '2026-05',
-          '2026-04',
-        ];
-        return SimpleDialog(
-          title: const Text('اختيار الشهر المالي', style: TextStyle(fontFamily: 'Cairo')),
-          children: months.map((m) {
-            return SimpleDialogOption(
-              onPressed: () {
-                provider.setSelectedMonth(m);
-                Navigator.pop(ctx);
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      m,
-                      style: TextStyle(
-                        fontWeight: provider.selectedMonth == m
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                        color: provider.selectedMonth == m
-                            ? AppTheme.primary
-                            : Colors.black87,
-                      ),
-                    ),
-                    if (provider.selectedMonth == m)
-                      const Icon(Icons.check, color: AppTheme.primary, size: 18),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
-        );
-      },
+  void _pickMonth(BuildContext context, AppProvider provider) async {
+    final selected = await MonthPickerDialog.show(
+      context,
+      initialMonth: provider.selectedMonth,
+      allowAllMonths: false,
     );
+    if (selected != null && selected.isNotEmpty) {
+      await provider.setSelectedMonth(selected);
+    }
   }
 }

@@ -52,6 +52,7 @@ class _AddAdvanceDialogState extends State<AddAdvanceDialog> {
 
     final amount = double.tryParse(_amountController.text.trim()) ?? 0.0;
     final provider = context.read<AppProvider>();
+    final advanceMonth = DateFormat('yyyy-MM').format(_date);
 
     final advance = Advance(
       id: 'adv_${DateTime.now().millisecondsSinceEpoch}',
@@ -59,6 +60,7 @@ class _AddAdvanceDialogState extends State<AddAdvanceDialog> {
       employeeName: _selectedEmployee!.name,
       amount: amount,
       date: _date,
+      month: advanceMonth,
       paidAmount: 0.0,
       autoDeductFromSalary: _autoDeduct,
       notes: _notesController.text.trim(),
@@ -70,7 +72,7 @@ class _AddAdvanceDialogState extends State<AddAdvanceDialog> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            'تم تسجيل سلفة للموظف ${_selectedEmployee!.name} بقيمة ${amount.toStringAsFixed(0)} ج وتم الخصم من الخزنة',
+            'تم تسجيل سلفة لشهر $advanceMonth للموظف ${_selectedEmployee!.name} بقيمة ${amount.toStringAsFixed(0)} ج وتم الخصم من الخزنة',
           ),
           backgroundColor: AppTheme.primary,
         ),
@@ -83,6 +85,7 @@ class _AddAdvanceDialogState extends State<AddAdvanceDialog> {
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
     final dateFormat = DateFormat('yyyy/MM/dd');
+    final advanceMonth = DateFormat('yyyy-MM').format(_date);
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -100,10 +103,10 @@ class _AddAdvanceDialogState extends State<AddAdvanceDialog> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text(
-                        'إعطاء سلفة للعامل 🤝',
-                        style: TextStyle(
-                          fontSize: 18,
+                      Text(
+                        'إعطاء سلفة لشهر $advanceMonth 🤝',
+                        style: const TextStyle(
+                          fontSize: 17,
                           fontWeight: FontWeight.bold,
                           fontFamily: 'Cairo',
                         ),
@@ -156,15 +159,15 @@ class _AddAdvanceDialogState extends State<AddAdvanceDialog> {
                         context: context,
                         initialDate: _date,
                         firstDate: DateTime(2020),
-                        lastDate: DateTime(2030),
+                        lastDate: DateTime(2035),
                       );
                       if (picked != null) setState(() => _date = picked);
                     },
                     borderRadius: BorderRadius.circular(12),
                     child: InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'تاريخ السلفة',
-                        prefixIcon: Icon(Icons.calendar_today),
+                      decoration: InputDecoration(
+                        labelText: 'تاريخ السلفة (الشهر المالي: $advanceMonth)',
+                        prefixIcon: const Icon(Icons.calendar_today),
                       ),
                       child: Text(dateFormat.format(_date)),
                     ),

@@ -30,10 +30,12 @@ class _PaySalaryScreenState extends State<PaySalaryScreen> {
   late TextEditingController _additionsController;
   late TextEditingController _deductionsController;
   late TextEditingController _advancesController;
+  late TextEditingController _paymentAmountController;
   late TextEditingController _notesController;
+  late TextEditingController _auditReasonController;
 
   late DateTime _paymentDate;
-  bool _isPaid = true;
+  String _payMode = 'full'; // 'full', 'partial', 'unpaid'
   String _paymentMethod = 'كاش';
 
   @override
@@ -55,7 +57,20 @@ class _PaySalaryScreenState extends State<PaySalaryScreen> {
       _advancesController =
           TextEditingController(text: rec.advancesDeducted.toStringAsFixed(0));
       _notesController = TextEditingController(text: rec.notes);
-      _isPaid = rec.isPaid;
+      _auditReasonController = TextEditingController();
+
+      if (rec.isFullyPaid) {
+        _payMode = 'full';
+        _paymentAmountController =
+            TextEditingController(text: rec.remainingUnpaidSalary.toStringAsFixed(0));
+      } else if (rec.isPartiallyPaid) {
+        _payMode = 'partial';
+        _paymentAmountController =
+            TextEditingController(text: rec.remainingUnpaidSalary.toStringAsFixed(0));
+      } else {
+        _payMode = 'unpaid';
+        _paymentAmountController = TextEditingController(text: '0');
+      }
       _paymentMethod = rec.paymentMethod;
     } else {
       _selectedEmployee = widget.preselectedEmployee ??
@@ -69,8 +84,21 @@ class _PaySalaryScreenState extends State<PaySalaryScreen> {
           TextEditingController(text: initialSalary.toStringAsFixed(0));
       _additionsController = TextEditingController(text: '0');
       _deductionsController = TextEditingController(text: '0');
-      _advancesController = TextEditingController(text: '0');
+
+      // Auto-fill this month's advances ONLY (starts at 0 in new month)
+      final thisMonthAdv = _selectedEmployee != null
+          ? provider.getEmployeeRemainingAdvances(_selectedEmployee!.id,
+              month: defaultMonth)
+          : 0.0;
+      _advancesController =
+          TextEditingController(text: thisMonthAdv.toStringAsFixed(0));
+
+      final initialNet = initialSalary - thisMonthAdv;
+      _paymentAmountController =
+          TextEditingController(text: initialNet > 0 ? initialNet.toStringAsFixed(0) : '0');
       _notesController = TextEditingController();
+      _auditReasonController = TextEditingController();
+      _payMode = 'full';
     }
   }
 
@@ -81,22 +109,43 @@ class _PaySalaryScreenState extends State<PaySalaryScreen> {
     _additionsController.dispose();
     _deductionsController.dispose();
     _advancesController.dispose();
+    _paymentAmountController.dispose();
     _notesController.dispose();
+    _auditReasonController.dispose();
     super.dispose();
   }
 
-  double get _basic => double.tryParse(_basicSalaryController.text.trim()) ?? 0.0;
-  double get _additions => double.tryParse(_additionsController.text.trim()) ?? 0.0;
-  double get _deductions => double.tryParse(_deductionsController.text.trim()) ?? 0.0;
-  double get _advances => double.tryParse(_advancesController.text.trim()) ?? 0.0;
+  double get _basic =>
+      double.tryParse(_basicSalaryController.text.trim()) ?? 0.0;
+  double get _additions =>
+      double.tryParse(_additionsController.text.trim()) ?? 0.0;
+  double get _deductions =>
+      double.tryParse(_deductionsController.text.trim()) ?? 0.0;
+  double get _advances =>
+      double.tryParse(_advancesController.text.trim()) ?? 0.0;
 
   double get _netSalary => (_basic + _additions - _deductions - _advances);
 
+  double get _alreadyPaid => widget.existingRecord?.paidAmount ?? 0.0;
+  double get _remainingNeeded =>
+      (_netSalary - _alreadyPaid).clamp(0.0, double.infinity);
+
   void _onEmployeeChanged(Employee? emp) {
     if (emp == null) return;
+    final provider = context.read<AppProvider>();
+    final month = _monthController.text.trim();
+    final thisMonthAdv =
+        provider.getEmployeeRemainingAdvances(emp.id, month: month);
+
     setState(() {
       _selectedEmployee = emp;
       _basicSalaryController.text = emp.salary.toStringAsFixed(0);
+      _advancesController.text = thisMonthAdv.toStringAsFixed(0);
+      final net = emp.salary - thisMonthAdv;
+      if (_payMode == 'full') {
+        _paymentAmountController.text =
+            net > 0 ? net.toStringAsFixed(0) : '0';
+      }
     });
   }
 
@@ -107,9 +156,22 @@ class _PaySalaryScreenState extends State<PaySalaryScreen> {
       allowAllMonths: false,
     );
     if (selected != null && selected.isNotEmpty) {
+      if (!mounted) return;
+      final provider = context.read<AppProvider>();
+      final empId = _selectedEmployee?.id;
+      final thisMonthAdv = empId != null
+          ? provider.getEmployeeRemainingAdvances(empId, month: selected)
+          : 0.0;
+
       setState(() {
         _monthController.text = selected;
         _paymentDate = AppProvider.getDayOneOfMonth(selected);
+        _advancesController.text = thisMonthAdv.toStringAsFixed(0);
+        if (_payMode == 'full') {
+          final net = _basic + _additions - _deductions - thisMonthAdv;
+          _paymentAmountController.text =
+              net > 0 ? net.toStringAsFixed(0) : '0';
+        }
       });
     }
   }
@@ -131,7 +193,7 @@ class _PaySalaryScreenState extends State<PaySalaryScreen> {
     if (_selectedEmployee == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('يرجى اختيار العامل المراد صرف مرتبه'),
+          content: Text('يرجى اختيار العامل المراد تسجيل مرتبه'),
           backgroundColor: Colors.red,
         ),
       );
@@ -139,42 +201,71 @@ class _PaySalaryScreenState extends State<PaySalaryScreen> {
     }
 
     final provider = context.read<AppProvider>();
+    final month = _monthController.text.trim();
 
-    final record = SalaryRecord(
-      id: widget.existingRecord?.id ??
-          'sal_${_selectedEmployee!.id}_${_monthController.text.trim()}',
+    double disburseAmount = 0.0;
+    if (_payMode == 'full') {
+      disburseAmount = _remainingNeeded;
+    } else if (_payMode == 'partial') {
+      disburseAmount =
+          double.tryParse(_paymentAmountController.text.trim()) ?? 0.0;
+    }
+
+    final baseRecord = SalaryRecord(
+      id: widget.existingRecord?.id ?? 'sal_${_selectedEmployee!.id}_$month',
       employeeId: _selectedEmployee!.id,
       employeeName: _selectedEmployee!.name,
-      month: _monthController.text.trim(),
+      month: month,
       basicSalary: _basic,
       additions: _additions,
       deductions: _deductions,
       advancesDeducted: _advances,
-      isPaid: _isPaid,
+      paidAmount: _alreadyPaid,
+      payments: widget.existingRecord?.payments ?? [],
+      auditLog: widget.existingRecord?.auditLog ?? [],
       paymentMethod: _paymentMethod,
-      paymentDate: _isPaid ? _paymentDate : null,
+      paymentDate: _payMode != 'unpaid' ? _paymentDate : null,
       notes: _notesController.text.trim(),
     );
 
-    if (_isPaid) {
-      await provider.paySalary(record);
+    // If an existing record is being edited and an audit reason was provided
+    if (widget.existingRecord != null &&
+        _auditReasonController.text.trim().isNotEmpty) {
+      await provider.recordSalaryCorrection(
+        recordId: baseRecord.id,
+        newBasicSalary: _basic,
+        newAdditions: _additions,
+        newDeductions: _deductions,
+        newAdvancesDeducted: _advances,
+        auditReason: _auditReasonController.text.trim(),
+      );
+    }
+
+    if (_payMode == 'unpaid' || disburseAmount <= 0) {
+      await provider.saveUnpaidSalaryRecord(baseRecord);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'تم صرف مرتب ${_selectedEmployee!.name} بقيمة ${_netSalary.toStringAsFixed(0)} ج وتم الخصم من الخزنة',
-            ),
-            backgroundColor: AppTheme.primary,
+          const SnackBar(
+            content: Text('تم حفظ بيانات المرتب بنجاح كـ "غير مدفوع" دون خصم من الخزنة'),
+            backgroundColor: Colors.orange,
           ),
         );
       }
     } else {
-      await provider.saveUnpaidSalaryRecord(record);
+      await provider.paySalary(
+        salary: baseRecord,
+        paymentAmount: disburseAmount,
+        paymentDate: _paymentDate,
+        paymentMethod: _paymentMethod,
+        notes: _notesController.text.trim(),
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم حفظ بيانات المرتب كـ "غير مدفوع"'),
-            backgroundColor: Colors.orange,
+          SnackBar(
+            content: Text(
+              'تم صرف ${disburseAmount.toStringAsFixed(0)} ج للموظف ${_selectedEmployee!.name} وتم الخصم من خزينة شهر $month',
+            ),
+            backgroundColor: AppTheme.primary,
           ),
         );
       }
@@ -186,15 +277,31 @@ class _PaySalaryScreenState extends State<PaySalaryScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<AppProvider>();
-    final pendingAdv = _selectedEmployee != null
-        ? provider.getEmployeeRemainingAdvances(_selectedEmployee!.id)
+    final currentMonth = _monthController.text.trim();
+
+    // Remaining advances strictly for THIS month
+    final thisMonthAdv = _selectedEmployee != null
+        ? provider.getEmployeeRemainingAdvances(_selectedEmployee!.id,
+            month: currentMonth)
         : 0.0;
-    final treasuryBalance = provider.currentTreasuryBalance;
+
+    // Outstanding historical advances from prior months
+    final historicalAdv = _selectedEmployee != null
+        ? provider.getEmployeeOutstandingHistoricalAdvances(
+            _selectedEmployee!.id,
+            upToMonth: currentMonth)
+        : 0.0;
+
+    final treasuryBalance =
+        provider.getTreasuryBalanceForMonth(currentMonth);
     final currencyFormat = NumberFormat('#,##0', 'en_US');
+    final dateFormat = DateFormat('yyyy/MM/dd');
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('صرف مرتب العامل 💵'),
+        title: Text(widget.existingRecord != null
+            ? 'تعديل وصرف مرتب العامل'
+            : 'تسجيل وصرف مرتب العامل 💵'),
         centerTitle: true,
       ),
       body: Center(
@@ -203,37 +310,48 @@ class _PaySalaryScreenState extends State<PaySalaryScreen> {
           child: Form(
             key: _formKey,
             child: ListView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
               children: [
-                // رصيد الخزنة
+                // Month & Treasury Banner
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
                     color: Colors.teal.shade50,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(color: Colors.teal.shade200),
                   ),
                   child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Icon(Icons.account_balance_wallet, color: Colors.teal.shade800),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'رصيد الخزنة المتاح: ${currencyFormat.format(treasuryBalance)} ج.م',
-                          style: TextStyle(
-                            fontFamily: 'Cairo',
-                            fontWeight: FontWeight.bold,
-                            color: Colors.teal.shade900,
-                            fontSize: 14,
+                      Row(
+                        children: [
+                          Icon(Icons.account_balance_wallet,
+                              color: Colors.teal.shade800),
+                          const SizedBox(width: 8),
+                          Text(
+                            'خزينة شهر $currentMonth: ${currencyFormat.format(treasuryBalance)} ج',
+                            style: TextStyle(
+                              fontFamily: 'Cairo',
+                              fontWeight: FontWeight.bold,
+                              color: Colors.teal.shade900,
+                              fontSize: 13.5,
+                            ),
                           ),
-                        ),
+                        ],
+                      ),
+                      TextButton.icon(
+                        onPressed: _pickSalaryMonth,
+                        icon: const Icon(Icons.edit_calendar, size: 16),
+                        label: Text('شهر: $currentMonth'),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 16),
 
-                // اختيار العامل
+                // Employee Selection
                 DropdownButtonFormField<Employee>(
                   initialValue: _selectedEmployee,
                   decoration: const InputDecoration(
@@ -244,99 +362,61 @@ class _PaySalaryScreenState extends State<PaySalaryScreen> {
                     return DropdownMenuItem(
                       value: emp,
                       child: Text(
-                        '${emp.name} (${emp.salary.toStringAsFixed(0)} ج)',
-                        overflow: TextOverflow.ellipsis,
+                        '${emp.name} (أساسي الملف: ${emp.salary.toStringAsFixed(0)} ج)',
                       ),
                     );
                   }).toList(),
-                  onChanged: widget.preselectedEmployee != null
+                  onChanged: widget.existingRecord != null
                       ? null
                       : _onEmployeeChanged,
                 ),
                 const SizedBox(height: 14),
 
-                // شهر المرتب
-                TextFormField(
-                  controller: _monthController,
-                  readOnly: true,
-                  onTap: _pickSalaryMonth,
-                  decoration: InputDecoration(
-                    labelText: 'الشهر المالي المستحق *',
-                    hintText: 'اضغط لاختيار الشهر',
-                    prefixIcon: const Icon(Icons.calendar_month, color: AppTheme.primary),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.edit_calendar, color: AppTheme.primary),
-                      onPressed: _pickSalaryMonth,
+                // Historical advances warning if any
+                if (historicalAdv > 0) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.amber.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.amber.shade300),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.info_outline, color: Colors.amber, size: 22),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            '💡 تنبيه: للعامل سلف معلقة سابقة من شهور ماضية بقيمة ${currencyFormat.format(historicalAdv)} ج.م. حسب قواعد النظام لا يتم خصمها تلقائياً من سلف شهر $currentMonth (سلف هذا الشهر تبدأ من الصفر).',
+                            style: const TextStyle(fontSize: 11.5, height: 1.4),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  validator: (v) =>
-                      v == null || v.trim().isEmpty ? 'يرجى اختيار الشهر' : null,
-                ),
-                const SizedBox(height: 10),
+                  const SizedBox(height: 14),
+                ],
 
-                // بطاقة تاريخ الصرف الافتراضي (يوم 1 في الشهر)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.blue.shade200),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.event_available, color: Colors.blue.shade700, size: 22),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'تاريخ الصرف: ${DateFormat('yyyy/MM/dd').format(_paymentDate)}',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13.5,
-                                color: Colors.blue.shade900,
-                                fontFamily: 'Cairo',
-                              ),
-                            ),
-                            Text(
-                              'تاريخ استحقاق وصرف المرتب: يوم 1 في الشهر (افتراضي)',
-                              style: TextStyle(
-                                fontSize: 11.5,
-                                color: Colors.blue.shade700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      TextButton.icon(
-                        onPressed: _pickPaymentDate,
-                        icon: const Icon(Icons.edit, size: 14),
-                        label: const Text('تغيير'),
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.blue.shade900,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-
-                // المرتب الأساسي
+                // Basic Salary for this month (Requirement #4)
                 TextFormField(
                   controller: _basicSalaryController,
                   keyboardType: TextInputType.number,
                   decoration: const InputDecoration(
-                    labelText: 'المرتب الأساسي (ج.م) *',
-                    prefixIcon: Icon(Icons.money),
+                    labelText: 'المرتب الأساسي لشهر هذا الشهر (ج.م) *',
+                    hintText: 'أدخل المرتب المستحق لهذا الشهر تحديداً',
+                    prefixIcon: Icon(Icons.payments_outlined),
                   ),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'يرجى إدخال المرتب الأساسي';
+                    final n = double.tryParse(v.trim());
+                    if (n == null || n < 0) return 'مبلغ غير صالح';
+                    return null;
+                  },
                   onChanged: (_) => setState(() {}),
-                  validator: (v) =>
-                      v == null || v.trim().isEmpty ? 'يرجى إدخال المرتب' : null,
                 ),
                 const SizedBox(height: 14),
 
-                // إضافات وخصومات
+                // Additions & Deductions
                 Row(
                   children: [
                     Expanded(
@@ -344,20 +424,22 @@ class _PaySalaryScreenState extends State<PaySalaryScreen> {
                         controller: _additionsController,
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(
-                          labelText: 'إضافات ومكافأة (+)',
-                          prefixIcon: Icon(Icons.add_circle_outline, color: Colors.green),
+                          labelText: 'إضافي ومكافآت (+)',
+                          prefixIcon: Icon(Icons.add_circle_outline,
+                              color: Colors.green),
                         ),
                         onChanged: (_) => setState(() {}),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 10),
                     Expanded(
                       child: TextFormField(
                         controller: _deductionsController,
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(
                           labelText: 'خصومات وجزاءات (-)',
-                          prefixIcon: Icon(Icons.remove_circle_outline, color: Colors.red),
+                          prefixIcon: Icon(Icons.remove_circle_outline,
+                              color: Colors.red),
                         ),
                         onChanged: (_) => setState(() {}),
                       ),
@@ -366,156 +448,143 @@ class _PaySalaryScreenState extends State<PaySalaryScreen> {
                 ),
                 const SizedBox(height: 14),
 
-                // سلف مستقطعة
+                // Advances for this month
                 TextFormField(
                   controller: _advancesController,
                   keyboardType: TextInputType.number,
                   decoration: InputDecoration(
-                    labelText: 'سلف مستقطعة من المرتب (-)',
-                    prefixIcon: const Icon(Icons.request_quote_outlined, color: Colors.amber),
-                    suffixIcon: pendingAdv > 0
+                    labelText: 'استقطاع سلف شهر $currentMonth (-)',
+                    hintText: 'سلف الشهر الحالي المتبقية: ${thisMonthAdv.toStringAsFixed(0)} ج',
+                    prefixIcon:
+                        const Icon(Icons.money_off, color: Colors.amber),
+                    suffixIcon: thisMonthAdv > 0
                         ? TextButton(
                             onPressed: () {
-                              setState(() {
-                                _advancesController.text =
-                                    pendingAdv.toStringAsFixed(0);
-                              });
+                              _advancesController.text =
+                                  thisMonthAdv.toStringAsFixed(0);
+                              setState(() {});
                             },
-                            child: const Text('خصم الكل'),
+                            child: const Text('خصم كل السلفة'),
                           )
                         : null,
                   ),
                   onChanged: (_) => setState(() {}),
                 ),
-                if (pendingAdv > 0) ...[
-                  const SizedBox(height: 6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.amber.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.amber.shade200),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.info_outline, size: 16, color: Colors.amber.shade900),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            'لدى العامل سلف متبقية تستحق السداد بقيمة: ${pendingAdv.toStringAsFixed(0)} ج.م',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.amber.shade900,
-                              fontWeight: FontWeight.bold,
-                              fontFamily: 'Cairo',
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 18),
+                const SizedBox(height: 14),
 
-                // بطاقة صافي المرتب المستحق
+                // Calculation Summary Card
                 Container(
-                  padding: const EdgeInsets.all(18),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        AppTheme.primary.withValues(alpha: 0.1),
-                        AppTheme.primary.withValues(alpha: 0.04),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade300),
                   ),
                   child: Column(
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
-                            'صافي المرتب المستحق للصرف:',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              fontFamily: 'Cairo',
-                            ),
-                          ),
+                          const Text('صافي المرتب المستحق للشهر:'),
                           Text(
-                            '${_netSalary.toStringAsFixed(0)} ج.م',
-                            style: TextStyle(
-                              fontSize: 24,
+                            '${currencyFormat.format(_netSalary)} ج.م',
+                            style: const TextStyle(
                               fontWeight: FontWeight.bold,
-                              color: _netSalary >= 0
-                                  ? AppTheme.primaryDark
-                                  : Colors.red.shade700,
-                              fontFamily: 'Cairo',
+                              fontSize: 16,
+                              color: AppTheme.primaryDark,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'المعادلة: الأساسي (${_basic.toStringAsFixed(0)}) + إضافي (${_additions.toStringAsFixed(0)}) - خصم (${_deductions.toStringAsFixed(0)}) - سلف (${_advances.toStringAsFixed(0)})',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          color: Colors.grey.shade700,
-                          fontFamily: 'Cairo',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 18),
-
-                // حالة الدفع وطريقة الدفع
-                Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade50,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.grey.shade200),
-                        ),
-                        child: Row(
+                      if (_alreadyPaid > 0) ...[
+                        const SizedBox(height: 4),
+                        Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
+                            const Text('المبلغ المسدد سابقاً:'),
                             Text(
-                              _isPaid ? 'الحالة: مدفوع' : 'الحالة: غير مدفوع',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'Cairo',
-                                color: _isPaid ? Colors.green.shade700 : Colors.orange.shade700,
-                              ),
-                            ),
-                            Switch(
-                              value: _isPaid,
-                              activeThumbColor: Colors.green.shade700,
-                              onChanged: (val) => setState(() => _isPaid = val),
+                              '${currencyFormat.format(_alreadyPaid)} ج.م',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.green),
                             ),
                           ],
                         ),
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('المتبقي المطلوب صرفه:'),
+                            Text(
+                              '${currencyFormat.format(_remainingNeeded)} ج.م',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.expenseRed,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Payment Status & Partial Payment Option (Requirement #6)
+                const Text(
+                  'طريقة وخيار الصرف:',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Cairo',
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ChoiceChip(
+                        label: const Text('صرف كامل المستحق'),
+                        selected: _payMode == 'full',
+                        onSelected: (val) {
+                          if (val) {
+                            setState(() {
+                              _payMode = 'full';
+                              _paymentAmountController.text =
+                                  _remainingNeeded.toStringAsFixed(0);
+                            });
+                          }
+                        },
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 8),
                     Expanded(
-                      child: DropdownButtonFormField<String>(
-                        initialValue: _paymentMethod,
-                        decoration: const InputDecoration(
-                          labelText: 'طريقة الدفع',
-                          prefixIcon: Icon(Icons.payment),
-                        ),
-                        items: const [
-                          DropdownMenuItem(value: 'كاش', child: Text('كاش (نقداً)')),
-                          DropdownMenuItem(value: 'تحويل بنكي', child: Text('تحويل بنكي')),
-                          DropdownMenuItem(value: 'محفظة إلكترونية', child: Text('محفظة')),
-                        ],
-                        onChanged: (val) {
-                          if (val != null) setState(() => _paymentMethod = val);
+                      child: ChoiceChip(
+                        label: const Text('صرف جزئي (مبلغ محدد)'),
+                        selected: _payMode == 'partial',
+                        onSelected: (val) {
+                          if (val) {
+                            setState(() {
+                              _payMode = 'partial';
+                              _paymentAmountController.text =
+                                  (_remainingNeeded / 2).toStringAsFixed(0);
+                            });
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ChoiceChip(
+                        label: const Text('تسجيل استحقاق فقط'),
+                        selected: _payMode == 'unpaid',
+                        onSelected: (val) {
+                          if (val) {
+                            setState(() {
+                              _payMode = 'unpaid';
+                              _paymentAmountController.text = '0';
+                            });
+                          }
                         },
                       ),
                     ),
@@ -523,40 +592,105 @@ class _PaySalaryScreenState extends State<PaySalaryScreen> {
                 ),
                 const SizedBox(height: 14),
 
-                // ملاحظات الصرف
+                if (_payMode == 'partial') ...[
+                  TextFormField(
+                    controller: _paymentAmountController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'المبلغ المدفوع فعلياً الآن (ج.م) *',
+                      hintText: 'الحد الأقصى: ${_remainingNeeded.toStringAsFixed(0)} ج',
+                      prefixIcon: const Icon(Icons.attach_money),
+                    ),
+                    validator: (v) {
+                      if (_payMode != 'partial') return null;
+                      if (v == null || v.trim().isEmpty) return 'يرجى إدخال المبلغ المدفوع';
+                      final n = double.tryParse(v.trim());
+                      if (n == null || n <= 0) return 'مبلغ غير صالح';
+                      if (n > _remainingNeeded) {
+                        return 'لا يمكن أن يتجاوز المبلغ المتبقي (${_remainingNeeded.toStringAsFixed(0)} ج)';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                ],
+
+                if (_payMode != 'unpaid') ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: InkWell(
+                          onTap: _pickPaymentDate,
+                          borderRadius: BorderRadius.circular(12),
+                          child: InputDecorator(
+                            decoration: const InputDecoration(
+                              labelText: 'تاريخ الصرف',
+                              prefixIcon: Icon(Icons.calendar_today),
+                            ),
+                            child: Text(dateFormat.format(_paymentDate)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: _paymentMethod,
+                          decoration: const InputDecoration(
+                            labelText: 'طريقة الدفع',
+                            prefixIcon: Icon(Icons.payment),
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: 'كاش', child: Text('كاش')),
+                            DropdownMenuItem(value: 'تحويل بنكي', child: Text('تحويل بنكي')),
+                            DropdownMenuItem(value: 'فودافون كاش / محفظة', child: Text('محفظة إلكترونية')),
+                          ],
+                          onChanged: (val) =>
+                              setState(() => _paymentMethod = val ?? 'كاش'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                ],
+
+                // Audit Reason (If editing existing record)
+                if (widget.existingRecord != null) ...[
+                  TextFormField(
+                    controller: _auditReasonController,
+                    decoration: const InputDecoration(
+                      labelText: 'سبب التعديل / ملاحظة التدقيق المالي',
+                      hintText: 'سجل سبباً لتعديل البيانات في سجل التدقيق المالي',
+                      prefixIcon: Icon(Icons.history_edu),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+
                 TextFormField(
                   controller: _notesController,
-                  maxLines: 2,
                   decoration: const InputDecoration(
-                    labelText: 'ملاحظات الصرف (اختياري)',
+                    labelText: 'ملاحظات عامة',
                     prefixIcon: Icon(Icons.notes),
                   ),
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 24),
 
-                // زر التأكيد
-                SizedBox(
-                  height: 52,
-                  child: ElevatedButton.icon(
-                    onPressed: _submit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _isPaid ? AppTheme.primary : Colors.orange.shade800,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    icon: const Icon(Icons.check_circle_outline),
-                    label: Text(
-                      _isPaid
-                          ? 'تأكيد وصرف المرتب من الخزنة 💰'
-                          : 'حفظ كمرتب مستحق غير مدفوع',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'Cairo',
-                      ),
-                    ),
+                ElevatedButton(
+                  onPressed: _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _payMode == 'unpaid'
+                        ? Colors.orange.shade800
+                        : AppTheme.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: Text(
+                    _payMode == 'unpaid'
+                        ? 'حفظ السجل كـ غير مدفوع'
+                        : (_payMode == 'partial'
+                            ? 'تأكيد صرف الدفعة الجزئية والخصم من الخزنة'
+                            : 'تأكيد الصرف الكامل والخصم من الخزنة'),
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.bold),
                   ),
                 ),
               ],
@@ -567,4 +701,3 @@ class _PaySalaryScreenState extends State<PaySalaryScreen> {
     );
   }
 }
-

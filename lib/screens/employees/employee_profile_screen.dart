@@ -29,6 +29,7 @@ class EmployeeProfileScreen extends StatelessWidget {
     }
 
     final remainingAdvances = provider.getEmployeeRemainingAdvances(employee.id);
+    final historicalAdvances = provider.getEmployeeOutstandingHistoricalAdvances(employee.id);
     final lastPaidSalary = provider.getEmployeeLastPaidSalary(employee.id);
     final totalPaid = provider.getEmployeeTotalPaid(employee.id);
     final salaries = provider.getEmployeeSalaries(employee.id);
@@ -318,9 +319,13 @@ class EmployeeProfileScreen extends StatelessWidget {
               children: [
                 Expanded(
                   child: _buildMetricCard(
-                    title: 'السلف المتبقية',
+                    title: 'سلف شهر ${provider.selectedMonth}',
                     value: '${remainingAdvances.toStringAsFixed(0)} ج',
-                    subtitle: remainingAdvances > 0 ? 'مستحق السداد' : 'لا يوجد سلف',
+                    subtitle: remainingAdvances > 0
+                        ? 'مستحق السداد'
+                        : (historicalAdvances > 0
+                            ? 'سلف سابقة: ${historicalAdvances.toStringAsFixed(0)} ج'
+                            : 'لا توجد سلف'),
                     icon: Icons.request_quote_outlined,
                     color: remainingAdvances > 0
                         ? Colors.amber.shade800
